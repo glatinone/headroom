@@ -1528,14 +1528,10 @@ def proxy(
         # for exactly the clients told to use it (#3082).
         ccr_inject_tool=not no_ccr,
         ccr_inject_marker=not no_ccr,
-        ccr_handle_responses=not no_ccr,
+        ccr_handle_responses=not (no_ccr or no_ccr_response_handling),
         ccr_resolve_markers_inline=ccr_inline_resolve,
         lossless=lossless,
         ccr_proactive_expansion=not no_ccr_proactive_expansion,
-        # Independent of --no-ccr: a client can offer headroom_retrieve itself
-        # (see the --no-ccr-response-handling help text), which unconditionally
-        # takes the buffered-stream path with no other opt-out (issue #3082).
-        ccr_handle_responses=not no_ccr_response_handling,
         # Flatten repeat-flag tuple AND any comma-separated values inside it.
         # `--proxy-extension a,b --proxy-extension c` and `HEADROOM_PROXY_EXTENSIONS=a,b,c`
         # both yield ["a", "b", "c"]. None when nothing was supplied.
