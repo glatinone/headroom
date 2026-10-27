@@ -175,12 +175,6 @@ def test_detects_fixed_width_command_output(content: str) -> None:
             id="c_defines",
         ),
         pytest.param(
-            'On branch main\nChanges not staged for commit:\n  (use "git add <file>..." to update what will be committed)\n'
-            + "\n".join(f"\tmodified:   src/m_{i}.py" for i in range(10)),
-            ContentType.PLAIN_TEXT,
-            id="git_status",
-        ),
-        pytest.param(
             "3aa5012 perf(memory/budget): precompute word sets once\nc81378c fix(grok): preserve xAI model context metadata\nb0c19a2 fix(security): reject unauthenticated public proxy binds\n871bbde fix(proxy): reject Anthropic batch operations on Copilot\na29162b fix(dashboard): separate rolling cache economics by owner",
             ContentType.PLAIN_TEXT,
             id="git_log",
@@ -194,6 +188,20 @@ def test_detects_fixed_width_command_output(content: str) -> None:
 )
 def test_fixed_width_does_not_claim_non_tables(content: str, expected: ContentType) -> None:
     assert detect_content_type(content).content_type is expected
+
+
+def test_git_status_is_not_a_rectangular_table() -> None:
+    status = (
+        "On branch main\nChanges not staged for commit:\n"
+        '  (use "git add <file>..." to update what will be committed)\n'
+        + "\n".join(f"\tmodified:   src/m_{i}.py" for i in range(10))
+    )
+
+    detected = detect_content_type(status)
+
+    assert detected.content_type is ContentType.TABULAR
+    assert detected.metadata["format"] == "git_status"
+    assert parse_tabular(status) is None
 
 
 # Detection — edge branches --------------------------------------------------
@@ -303,6 +311,29 @@ def test_compress_passes_through_ragged_table(monkeypatch) -> None:
     result = TabularCompressor().compress(ragged)
     assert not result.was_modified
     assert result.compressed == ragged
+
+
+_JOIN_CSV = "id,name,id,name\n1,alice,10,acme\n2,bob,20,globex\n3,carol,30,initech\n"
+_BLANK_HEADER_MARKDOWN = (
+    "| id | | |\n| --- | --- | --- |\n| 1 | alice | x |\n| 2 | bob | y |\n| 3 | carol | z |"
+)
+
+
+@pytest.mark.parametrize("content", [_JOIN_CSV, _BLANK_HEADER_MARKDOWN])
+def test_parse_tabular_rejects_duplicate_headers(content: str) -> None:
+    # Records are keyed by header, so a repeated name keeps only its last
+    # column: `alice` and `bob` would vanish from the compressed table.
+    assert parse_tabular(content) is None
+
+
+def test_compress_passes_through_duplicate_headers() -> None:
+    # Large enough that SmartCrusher would otherwise save bytes on it.
+    content = "id,name,id,name\n" + "".join(
+        f"{i},user_{i},{100 + i},org_{i % 3}\n" for i in range(40)
+    )
+    result = TabularCompressor().compress(content)
+    assert not result.was_modified
+    assert result.compressed == content
 
 
 def _csv_with_an_oversized_cell() -> str:
